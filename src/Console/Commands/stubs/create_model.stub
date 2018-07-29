@@ -1,0 +1,10 @@
+<?php
+
+namespace {{namespace}};
+
+use Roster\Database\Model;
+
+class {{className}} extends Model
+{
+    // do something
+}

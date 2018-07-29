@@ -1,0 +1,13 @@
+<?php
+
+require_once __DIR__.'/vendor/autoload.php';
+
+use App\Commands\Kernel as ConsoleKernel;
+
+$app = new Roster\Support\App();
+$app->setBasePath(realpath(__DIR__));
+$app->aliases();
+
+$consoleKernel = new ConsoleKernel();
+$consoleKernel->addCommands();
+$consoleKernel->run();

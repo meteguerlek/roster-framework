@@ -1,0 +1,10 @@
+# Add any directories, files, or patterns you don't want to be tracked by version control
+/.idea/deployment.xml
+/.idea/modules.xml
+/.idea/roster.iml
+/.idea/vcs.xml
+/.idea/workspace.xml
+/vendor
+/.idea
+/.grl
+/public/assets/prepros-6.config

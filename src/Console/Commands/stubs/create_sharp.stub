@@ -1,0 +1,21 @@
+<?php
+
+namespace App\Sharp;
+
+use Roster\Sharp\Tinker\Sharp;
+
+class Statements
+{
+    public function premissions()
+    {
+        return Sharp::make('premissions') // Give your own Sharp statement a name
+            ->if('Auth::check({id})') // Set if expression
+            ->name('admin') // Sharp statement @admin
+            ->elseif('Auth::user()') // Set elseif expression
+            ->name('editor') // Sharp statement @editor
+            ->create();
+
+            // You don't need else statement, just use @else
+            // At the end you need add @endif or endadmin, both are working
+    }
+}
