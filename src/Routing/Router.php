@@ -246,7 +246,7 @@ class Router
             return $static->loadController(static::$routes[static::getMethod()][static::$currentQuery]);
         }
 
-        return abort('error');
+        return $static->abort();
     }
 
     public static function loadRoutes()
@@ -463,7 +463,7 @@ class Router
                 return $this->callRedirect($route['basic'], $route['with']);
             }
 
-            return abort('error');
+            return $this->abort();
         }
 
         // Closure
@@ -690,6 +690,13 @@ class Router
         {
             throw new \Exception('The Method ' . $method . ' not exist!');
         }
+    }
+
+    protected function abort()
+    {
+        header("HTTP/1.0 404 Not Found");
+
+        customView('error'); die;
     }
 
     public function __call($method, $arguments)
