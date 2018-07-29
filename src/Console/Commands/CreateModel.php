@@ -65,6 +65,18 @@ class CreateModel extends Command
 
         $stub = str_replace('{{namespace}}', $namespace, $stub);
 
+        $paths = '';
+
+        foreach ($class as $folder)
+        {
+            $paths .= '/'.$folder;
+
+            if (!File::isDir($disk.'/'.$paths))
+            {
+                File::makeDir($disk.'/'.$paths);
+            }
+        }
+
         File::create($stub, $disk.'.'.implode('.', $class), $className);
 
         return $output->writeln('<fg=green>Model '.$input->getArgument('name').' created.</>');
