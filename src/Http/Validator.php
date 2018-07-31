@@ -101,7 +101,8 @@ class Validator
                 {
                     $options = explode(':', $rule);
 
-                    $rulePicker['needed'] = count($options) ? $options[0] : $options;
+                    $rulePicker['needed'] = isset($options[1]) ? $options[1] : $options;
+                    $rulePicker['type'] =  isset($options[1]) ? $options[0] : $options;
                 }
 
                 $this->callRules($rulePicker);

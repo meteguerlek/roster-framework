@@ -90,7 +90,7 @@ class Grammer
         {
             return PDO::PARAM_STR;
         }
-        elseif (is_int($value))
+        elseif (is_numeric($value))
         {
             return PDO::PARAM_INT;
         }

@@ -193,21 +193,35 @@ class QueryBuilder
 
     /**
      * @param Closure $closure
+     * @param null $operator
      * @return $this
      */
-    public function whereNotExists(Closure $closure)
+    public function whereExists(Closure $closure, $operator = null)
     {
-        $newQuery = new $this();
+        $newQuery = new QueryBuilder();
 
         $closure($newQuery);
 
+        $operator = $operator ? "$operator exists" : "exists";
+
         $this->condition[] = !$this->haveWhere
-            ? "where not exists ({$this->grammer->compileSelect($newQuery)})"
-            : "and not exists ({$this->grammer->compileSelect($newQuery)})";
+            ? "where $operator ({$this->grammer->compileSelect($newQuery)})"
+            : "and $operator ({$this->grammer->compileSelect($newQuery)})";
 
         $this->haveWhere = true;
 
         $this->bindings += $newQuery->bindings;
+
+        return $this;
+    }
+
+    /**
+     * @param Closure $closure
+     * @return $this
+     */
+    public function whereNotExists(Closure $closure)
+    {
+        $this->whereExists($closure, 'not');
 
         return $this;
     }
