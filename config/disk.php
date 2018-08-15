@@ -3,7 +3,9 @@ return [
     'view' => 'resources.views',
     'controllers' => 'app.Http.Controllers',
     'models' => 'app',
+    'mail' => 'app.Mail',
     'middleware' => 'app.Http.Middleware',
+    'rules' => 'app.Rules',
     'customView' => 'src.View.views',
     'storage' => [
         'view' => 'storage.app.views',

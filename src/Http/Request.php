@@ -257,6 +257,14 @@ class Request
     }
 
     /**
+     * @return bool
+     */
+    public static function isGet()
+    {
+        return static::method() == 'GET';
+    }
+
+    /**
      * Get uri
      *
      * @return mixed

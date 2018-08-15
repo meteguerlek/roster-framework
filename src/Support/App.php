@@ -31,7 +31,6 @@ class App
     /**
      * Boot app
      *
-     * @throws \Exception
      */
     public function boot()
     {
@@ -83,7 +82,6 @@ class App
     /**
      * App aliases
      *
-     * @throws \Exception
      */
     public function aliases()
     {

@@ -4,6 +4,7 @@ namespace Roster\Pagination;
 
 use Roster\Http\Request;
 use Roster\Logger\Log;
+use Roster\View\HtmlString;
 
 class Paginator
 {
@@ -151,13 +152,15 @@ class Paginator
      * Show links
      *
      * @param string $template
-     * @return \Roster\View\View
+     * @return HtmlString
      */
     public function links($template = 'pagination.paginate')
     {
         if($this->total > $this->perPage)
         {
-            return customView($template, ['paginate' => $this->paginate()]);
+            return new HtmlString(
+                customView($template, ['paginate' => $this->paginate()])->render()
+            );
         }
     }
 }

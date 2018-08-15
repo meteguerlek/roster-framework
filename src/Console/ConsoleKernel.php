@@ -1,13 +1,14 @@
 <?php
 namespace Roster\Console;
 
+use Roster\Console\Commands\CreateMail;
 use Roster\Console\Commands\RouteCache;
 use Roster\Console\Commands\RouteClear;
 use Roster\Console\Commands\CreateModel;
 use Roster\Console\Commands\CreateSharp;
 use Roster\Console\Commands\CreateController;
 use Roster\Console\Commands\CreateMiddleware;
-use Roster\Console\Commands\CreateValidation;
+use Roster\Console\Commands\CreateRule;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -23,8 +24,9 @@ class ConsoleKernel
         RouteCache::class,
         RouteClear::class,
         CreateController::class,
-        CreateValidation::class,
-        CreateMiddleware::class
+        CreateRule::class,
+        CreateMiddleware::class,
+        CreateMail::class
     ];
 
     /**
@@ -51,6 +53,7 @@ class ConsoleKernel
     public function addCommands()
     {
         $application = new Application();
+        $application->setAutoExit(false);
 
         foreach ($this->getCommands() as $command)
         {

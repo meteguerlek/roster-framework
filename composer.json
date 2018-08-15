@@ -4,7 +4,8 @@
 			"src/Helpers/Helpers.php"
 		],
 		"psr-4": {
-			"App\\":"app/"
+			"App\\":"app/",
+			"Roster\\":"src/"
 		}
 	},
 	"autoload-dev": {
@@ -12,7 +13,6 @@
 			"src/Helpers/Helpers.php"
 		],
 		"psr-4": {
-			"Roster\\":"src/",
 			"Tests\\": "tests/"
 		}
 	},

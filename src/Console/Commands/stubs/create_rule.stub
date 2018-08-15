@@ -1,0 +1,16 @@
+<?php
+
+namespace {{namespace}};
+
+class {{className}}
+{
+    public function passes($attribute, $value)
+    {
+        return true;
+    }
+
+    public function message()
+    {
+        return '';
+    }
+}

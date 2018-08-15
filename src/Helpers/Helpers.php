@@ -1,8 +1,10 @@
 <?php
 
 use Roster\Container\Container;
-use Roster\Support\Api;
+use Roster\Http\Response;
+
 use Roster\Support\App;
+use Roster\View\HtmlString;
 use Roster\View\View;
 use Roster\Support\Grl;
 use Roster\Http\Request;
@@ -42,7 +44,6 @@ function getClass($class, $namespace = '')
  * @param $config
  * @param $directory
  * @return string
- * @throws Exception
  */
 function config($config, $directory = 'config')
 {
@@ -55,7 +56,6 @@ function config($config, $directory = 'config')
  * @param $get
  * @param $options
  * @return string
- * @throws Exception
  */
 function __($get, array $options = [])
 {
@@ -67,7 +67,7 @@ function __($get, array $options = [])
 
     foreach ($options as $key => $option)
     {
-        $text = str_replace($key, $option, $text);
+        $text = str_replace(':'.$key, $option, $text);
     }
 
     return $text;
@@ -104,12 +104,17 @@ function abort($view)
 /**
  *
  *
- * @param $content
+ * @param $content|HtmlString
  * @param bool $dobleEncode
  * @return string
  */
 function e($content, $dobleEncode = true)
 {
+    if ($content instanceof HtmlString)
+    {
+        return $content;
+    }
+
     return htmlspecialchars($content, ENT_QUOTES, 'UTF-8', $dobleEncode);
 }
 
@@ -119,7 +124,6 @@ function e($content, $dobleEncode = true)
  * @param $template
  * @param array $variables
  * @return View
- * @throws Exception
  */
 function view($template, $variables = [])
 {
@@ -129,11 +133,12 @@ function view($template, $variables = [])
 /**
  * Response comimg soon
  *
- * @return Api
+ * @param string $response
+ * @return Response
  */
-function response()
+function response($response = '')
 {
-    return Api::make();
+    return new Response($response);
 }
 
 /**
@@ -146,12 +151,9 @@ function response()
  */
 function customView($template, $variables = [])
 {
-    $orginal = File::where(config('disk.view'), $template)->getPath();
-
-    // If the template allready exists in view directory then give it back
-    if (File::where($orginal)->exist())
+    if (File::where(config('disk.view'), $template)->exist())
     {
-        return new view($template, $variables);
+        return new View($template, $variables);
     }
 
     return new View($template, $variables, config('disk.customView'));
@@ -273,11 +275,14 @@ function csrf_token()
  * Redirect
  *
  * @param $redicton
- * @param int $permanent
+ * @param int $code
+ * @return \Roster\Http\Redirect
  */
-function redirect($redicton, $permanent = 301)
+function redirect($redicton, $code = 301)
 {
-    header('Location:'. $redicton, true, $permanent); exit;
+    return (new Response())
+        ->header('Location', $redicton, true, $code)
+        ->redirect();
 }
 
 /**
@@ -288,10 +293,10 @@ function back()
 {
     if (isset($_SERVER['HTTP_REFERER']))
     {
-        $currentUri = $_SERVER['HTTP_REFERER'];
-
-        header('Location:'. $currentUri); exit;
+        return redirect($_SERVER['HTTP_REFERER']);
     }
+
+    return redirect('/');
 }
 
 /**

@@ -1,0 +1,19 @@
+<?php
+
+namespace {{namespace}};
+
+use Roster\Mail\Mailable;
+
+class {{className}} extends Mailable
+{
+    public function __construct()
+    {
+        //
+    }
+
+    public function build()
+    {
+        $this->subject('Hi')
+            ->view('view', ['name' => 'mete']);
+    }
+}

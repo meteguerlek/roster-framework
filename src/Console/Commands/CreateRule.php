@@ -4,12 +4,11 @@ namespace Roster\Console\Commands;
 
 use Roster\Filesystem\File;
 use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
-class CreateModel extends Command
+class CreateRule extends Command
 {
     /**
      * Configure
@@ -17,15 +16,9 @@ class CreateModel extends Command
      */
     protected function configure()
     {
-        $this->setName("create:model")
-            ->setDescription("Create model with default content.")
-            ->addArgument('name', InputArgument::REQUIRED, 'Who do you want to greet?')
-            ->addOption(
-                'controller',
-                'c',
-                InputOption::VALUE_NONE
-            )
-            ->setHelp('How do you call it?');
+        $this->setName("create:rule")
+            ->addArgument('name', InputArgument::REQUIRED, 'Name?')
+            ->setDescription("Create rule.");
     }
 
     /**
@@ -37,23 +30,22 @@ class CreateModel extends Command
      */
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        $this->createModel($input, $output);
-
+        $this->createRule($input, $output);
     }
 
     /**
-     * Create model
+     * Create validation
      *
      * @param $input
      * @param $output
      * @return mixed
      */
-    protected function createModel($input, $output)
+    protected function createRule($input, $output)
     {
-        $stub = File::where('src.Console.Commands.stubs', 'create_model', 'stub')
+        $stub = File::where('src.Console.Commands.stubs', 'create_rule', 'stub')
             ->getContent();
 
-        $disk = config('disk.models');
+        $disk = config('disk.rules');
 
         $class = explode('/', $input->getArgument('name'));
         $className = array_pop($class);
@@ -68,6 +60,6 @@ class CreateModel extends Command
         File::create($stub, $disk.'.'.implode('.', $class), $className);
 
         return $output->writeln('<fg=green>Model '.$input->getArgument('name').' created.</>');
-
     }
+
 }

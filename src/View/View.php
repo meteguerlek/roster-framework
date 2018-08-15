@@ -16,16 +16,6 @@ class View
     /**
      * @var string
      */
-    protected $fileName;
-
-    /**
-     * @var string
-     */
-    protected $fileType;
-
-    /**
-     * @var string
-     */
     protected $template;
 
     /**
@@ -47,8 +37,6 @@ class View
         static::$variables += $variables;
 
         $this->directory = is_null($directory) ? config('disk.view') : $directory;
-
-        $this->render();
     }
 
     /**
@@ -64,7 +52,7 @@ class View
         {
             static::$variables += ['__sharp' => new LayoutBuilder()];
 
-            return (new SharpCompiler())->compile($checkSharp, $this->template);
+            return (new SharpCompiler)->compile($checkSharp, $this->template);
         }
 
         return $file;
@@ -76,18 +64,6 @@ class View
      * @return mixed
      */
     public function render()
-    {
-        $file = $this->getView();
-
-        extract(static::$variables);
-
-        return include $file;
-    }
-
-    /**
-     * @return string
-     */
-    public function html()
     {
         $file = $this->getView();
 
@@ -112,6 +88,17 @@ class View
         return $file->exist() ? $file->getPath() : false;
     }
 
+    public function with($data)
+    {
+        static::$variables += is_array($data) ? $data : func_get_args();
+
+        return $this;
+    }
+
+    /**
+     * @param $key
+     * @param $value
+     */
     public static function share($key, $value)
     {
         static::$variables[$key] = $value;
@@ -122,6 +109,6 @@ class View
      */
     public function __toString()
     {
-        return '';
+        return $this->render();
     }
 }

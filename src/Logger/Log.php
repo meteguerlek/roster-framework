@@ -59,7 +59,5 @@ class Log
         {
             return $static->add($name, $arguments[0]);
         }
-
-        throw new \Exception("Method: $name cannot be found.");
     }
 }

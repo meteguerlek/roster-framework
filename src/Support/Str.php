@@ -53,17 +53,12 @@ class Str
      */
     public static function replace(array $search, $str)
     {
-        if (!empty($search) && is_array($search))
+        foreach ($search as $s => $r)
         {
-            foreach ($search as $s => $r)
-            {
-                $str = str_replace($s, $r, $str);
-            }
-
-            return $str;
+            $str = str_replace($s, $r, $str);
         }
 
-        return false;
+        return $str;
     }
 
     /**

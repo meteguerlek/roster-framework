@@ -328,8 +328,25 @@ class QueryBuilder
         $this->sql = $this->grammer->compileUpdate($this, $columns);
 
         array_unshift($this->bindings, ...array_values($columns));
+        $query = $this->save();
 
-        return $this->save();
+        $model = $this->model;
+
+        if ($query->error)
+        {
+            return false;
+        }
+
+        $model->setWhereValue($query->id);
+
+        if ($query->id)
+        {
+            $model->setAttribute($model->getWhere(), $query->id);
+        }
+
+        $model->fill($columns);
+
+        return $model;
     }
 
     /**
@@ -366,15 +383,21 @@ class QueryBuilder
 
         $model = $this->model;
 
-        if (!$query->error)
+        if ($query->error)
         {
-            $model->setWhereValue($query->id);
-            $model->setAttributes($model->getWhere(), $query->id);
-
-            return $model;
+            return false;
         }
 
-        return false;
+        $model->setWhereValue($query->id);
+
+        if ($query->id)
+        {
+            $model->setAttribute($model->getWhere(), $query->id);
+        }
+
+        $model->fill($columns);
+
+        return $model;
     }
 
     /**
@@ -607,21 +630,41 @@ class QueryBuilder
     /**
      * Union
      *
-     * @param $queryBuilder
+     * @param $query
      * @param string $union
      * @return $this
      * @throws \Exception
      */
-    public function union($queryBuilder, $union = '')
+    public function union($query, $union = '')
     {
-        if ($queryBuilder instanceof QueryBuilder)
+        if ($query instanceof QueryBuilder)
         {
-            $this->unions[$union] = $queryBuilder;
+            $this->unions[$union] = $query;
 
             return $this;
         }
 
         throw new \Exception("Argument 1 must be an instance of QueryBuilder");
+    }
+
+    /**
+     * @param $assert
+     * @param Closure $closure
+     * @param null $default
+     * @return QueryBuilder
+     */
+    public function when($assert, Closure $closure, $default = null)
+    {
+        if ($assert)
+        {
+            $closure($this);
+        }
+        elseif ($default)
+        {
+            $closure($this);
+        }
+
+        return $this;
     }
 
     /**
@@ -837,7 +880,7 @@ class QueryBuilder
     protected function getModel($result)
     {
         $model = new $this->model();
-        $model->setAttributes($result ? $result : []);
+        $model->fill($result ? $result : []);
         $model->setWhereValue(isset($result[$model->getWhere()]) ? $result[$model->getWhere()] : false);
 
         return $model;

@@ -81,6 +81,8 @@ class File
         // Merge Custom options and User options
         $options = array_replace(static::$customOptions, $options);
 
+        static::createFolderIfNotExist($directory, $fileName);
+
         // Filepath
         $path = static::where($directory, $fileName, $options['filetype'])->getPath();
 
@@ -95,6 +97,27 @@ class File
 
         // return the filepath
         return $path;
+    }
+
+    /**
+     * @param $directory
+     * @param $fileName
+     */
+    protected static function createFolderIfNotExist($directory, $fileName)
+    {
+        $paths = '';
+        $checkIfFilenameextendsFolder = explode('.', $fileName);
+        array_pop($checkIfFilenameextendsFolder);
+
+        foreach (explode('.', $directory.implode('.', $checkIfFilenameextendsFolder)) as $folder)
+        {
+            $paths .= '/'.$folder;
+
+            if (!File::isDir($paths))
+            {
+                File::makeDir($paths);
+            }
+        }
     }
 
     /**

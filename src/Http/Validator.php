@@ -2,6 +2,7 @@
 
 namespace Roster\Http;
 
+use Roster\Database\DB;
 use Roster\Support\Str;
 use Roster\Support\Input;
 use App\Validation\Rules;
@@ -12,46 +13,51 @@ class Validator
     /**
      * @var array
      */
-    protected $errors = [];
+    protected $data = [];
 
     /**
      * @var array
      */
-    protected $alreadySet = [];
+    protected $messages = [];
 
     /**
-     * @var string
+     * @var array
      */
-    protected $errorName = null;
+    protected $customAttributes = [];
 
     /**
-     * @var Request
+     * @var array
      */
-    protected $request = [];
+    protected $customMessages = [];
 
     /**
-     * @var string
+     * Validator constructor.
+     * @param array $data
+     * @param array $validation
+     * @param array $messages
+     * @param array $customAttributes
      */
-    protected $password = null;
+    public function __construct(array $data, array $validation, array $messages = [], array $customAttributes = [])
+    {
+        $this->data = $data;
+        $this->customMessages = $messages;
+        $this->customAttributes = $customAttributes;
+
+        $this->arrange($validation);
+    }
 
     /**
      * Start with validation
      *
-     * @param Request $request
+     * @param array $data
      * @param array $validation
+     * @param array $messages
+     * @param array $customAttributes
      * @return Validator
      */
-    public static function make($request, array $validation)
+    public static function make(array $data, array $validation, array $messages = [], array $customAttributes = [])
     {
-        $static = new static;
-
-        // Set request results
-        $static->request = $request;
-
-        // Filter and arrange validation
-        $static->arrange($validation);
-
-        return $static;
+        return new static($data, $validation, $messages, $customAttributes);
     }
 
     /**
@@ -64,19 +70,64 @@ class Validator
     {
         $results = [];
 
-        $rules = [];
-
         foreach($column as $key => $value)
         {
-            $results[$key]['value'] = $this->request->{$key};
-            $rules[$key]['rules'] = explode('|', $value);
-        }
+            $rules = $this->getRules($value);
+            $value = $this->getValue($key);
 
-        $results = array_merge_recursive($results, $rules);
+            if (!in_array('nullable', $rules) || $this->nullable($value))
+            {
+                $nullable = array_search('nullable', $rules);
+
+                if (is_int($nullable))
+                {
+                    unset($rules[$nullable]);
+                }
+
+                $results[$key]['rules'] = $rules;
+                $results[$key]['value'] = $value;
+            }
+        }
 
         $this->collect($results);
 
         return $this;
+    }
+
+    /**
+     * @param $rules
+     * @return array
+     */
+    protected function getRules($rules)
+    {
+        if (is_array($rules))
+        {
+            return array_values($rules);
+        }
+
+        return explode('|', $rules);
+    }
+
+    /**
+     * @param $value
+     * @return bool
+     */
+    protected function nullable($value)
+    {
+        if (is_array($value))
+        {
+           if (isset($value['error']) && $value['error'])
+           {
+               return false;
+           }
+
+           if (empty($value))
+           {
+               return false;
+           }
+        }
+
+        return $value;
     }
 
     /**
@@ -97,19 +148,19 @@ class Validator
                     'column' => $column
                 ];
 
-                if (strstr($rule, ':'))
+                if (is_string($rule) && strstr($rule, ':'))
                 {
                     $options = explode(':', $rule);
 
-                    $rulePicker['needed'] = isset($options[1]) ? $options[1] : $options;
-                    $rulePicker['type'] =  isset($options[1]) ? $options[0] : $options;
+                    $rulePicker['type'] =  array_shift($options);
+                    $rulePicker['needed'] = $options;
                 }
 
                 $this->callRules($rulePicker);
             }
         }
 
-        return $this->setErrors()
+        return $this->setMessages()
             ->setInputs()
             ->clearInputs();
     }
@@ -122,13 +173,18 @@ class Validator
      */
     protected function callRules($rulePicker)
     {
-        if (method_exists(Rules::class, $rulePicker['type']))
+        if (is_object($rulePicker['type']))
         {
-            return (new Rules())->{$rulePicker['type']}((object) $rulePicker, $this);
+            $rule = $rulePicker['type'];
+
+            if (!$rule->passes($rulePicker['column'], $rulePicker['value']))
+            {
+                $this->addMessage($rulePicker['column'], $rule->message());
+            }
         }
         elseif (method_exists($this, $rulePicker['type']))
         {
-            return $this->{$rulePicker['type']}((object) $rulePicker);
+            $this->{$rulePicker['type']}((object) $rulePicker);
         }
     }
 
@@ -137,11 +193,37 @@ class Validator
      *
      * @return mixed
      */
-    public function setErrors()
+    public function setMessages()
     {
-        Alert::error($this->errors);
+        if ($this->fails())
+        {
+            Alert::error($this->messages);
+        }
 
         return $this;
+    }
+
+    /**
+     * @param $key
+     * @return bool
+     */
+    public function hasValue($key)
+    {
+        return array_key_exists($key, $this->data);
+    }
+
+    /**
+     * @param $key
+     * @return mixed|null
+     */
+    public function getValue($key)
+    {
+        if ($this->hasValue($key))
+        {
+            return $this->data[$key];
+        }
+
+        return null;
     }
 
     /**
@@ -149,9 +231,9 @@ class Validator
      *
      * @return array
      */
-    public function getErrors()
+    public function getMessages()
     {
-        return $this->errors;
+        return $this->messages;
     }
 
     /**
@@ -161,18 +243,7 @@ class Validator
      */
     public function hasError($key)
     {
-        return isset($this->errors[$key]);
-    }
-
-    /**
-     * Get error counts
-     *
-     * @param $key
-     * @return int
-     */
-    public function howManyError($key)
-    {
-        return isset($this->alreadySet[$key]) ? $this->alreadySet : 0;
+        return isset($this->messages[$key]);
     }
 
     /**
@@ -183,7 +254,7 @@ class Validator
      */
     public function fails()
     {
-        return !empty($this->errors);
+        return !empty($this->messages);
     }
 
     /**
@@ -193,7 +264,7 @@ class Validator
      */
     public function clearErrors()
     {
-        return $this->errors = [];
+        return $this->messages = [];
     }
 
     /**
@@ -206,7 +277,7 @@ class Validator
     {
         $inputs = [];
 
-        foreach ($this->request->all() as $key => $value)
+        foreach ($this->data as $key => $value)
         {
             //TODO: check
             if (in_array($key, $with))
@@ -260,14 +331,6 @@ class Validator
     }
 
     /**
-     * @return Request
-     */
-    public function request()
-    {
-        return $this->request;
-    }
-
-    /**
      * Set attributes for errors
      * 
      * @param $rule
@@ -276,13 +339,22 @@ class Validator
     protected function setAttributes($rule)
     {
         $options = [
-            ':field' => $rule->column,
-            ':needed' => (!empty($rule->needed)) ? (is_array($rule->needed)) ? implode(', ', $rule->needed) : $rule->needed : '',
-            '_id' => '',
-            '_' => ' '
+            'field' => $this->getAttribute($rule->column),
+            'needed' => !empty($rule->needed) ? is_array($rule->needed) ? implode(', ', $rule->needed) : $rule->needed : ''
         ];
 
         return $options;
+    }
+
+    /**
+     * @param $attribute
+     * @return bool|mixed
+     */
+    protected function getAttribute($attribute)
+    {
+        $attribute = array_key_exists($attribute, $this->customAttributes) ? $this->customAttributes[$attribute] : ucfirst($attribute);
+
+        return Str::replace(['_' => ' '], $attribute);
     }
 
     /**
@@ -290,6 +362,7 @@ class Validator
      *
      * @param $rule
      * @return mixed|string
+     * @throws \Exception
      */
     protected function message($rule)
     {
@@ -297,34 +370,28 @@ class Validator
 
         $message =  __('roster.form_validation.'. $rule->type, $options);
 
-        return $this->error($rule->column, $message);
+        return $this->addMessage($rule->column, $message);
     }
 
     /**
      * Add error
      *
      * @param $field
-     * @param $message
+     * @param $messages
      * @param array $options
      * @return mixed
      */
-    public function error($field, $message, array $options = [])
+    public function addMessage($field, $messages, array $options = [])
     {
-        if (!empty($options))
+        foreach ((array) $messages as $message)
         {
-            $message = Str::replace($options, $message);
+            if (!empty($options))
+            {
+                $message = Str::replace($options, $message);
+            }
+
+            $this->messages[$field][] = $message;
         }
-
-        if (isset($this->errors[$field]))
-        {
-            $alreadySet = $this->alreadySet[$field]++;
-
-            return $this->errors[$field.'_'.$alreadySet] = $message;
-        }
-
-        $this->alreadySet[$field] = 1;
-
-        return $this->errors[$field] = $message;
     }
 
     /**
@@ -408,7 +475,7 @@ class Validator
      */
     public function max($rule)
     {
-        if (strlen($rule->value) > $rule->needed)
+        if (strlen($rule->value) > current($rule->needed))
         {
             return $this->message($rule);
         }
@@ -446,7 +513,7 @@ class Validator
     {
         if (isset($rule->needed))
         {
-            return $this->validateDate($rule->value, $rule->needed)
+            return $this->validateDate($rule->value, current($rule->needed))
                 ? true
                 : $this->message($rule);
         }
@@ -498,15 +565,34 @@ class Validator
      * @param $rule
      * @return mixed|string
      */
-    public function password($rule)
+    public function confirmed($rule)
     {
-        if (empty($this->password))
+        if ($rule->value != $this->getValue($rule->column.'_confirmation'))
         {
-            $this->password = $rule->value;
+            return $this->message($rule);
         }
-        else
+    }
+
+    /**
+     * @param $rule
+     * @return mixed|string
+     */
+    public function unique($rule)
+    {
+        if ($rule)
         {
-            if ($this->password !== $rule->value)
+            $db = explode(',', current($rule->needed));
+
+            $table = current($db);
+            $field = $rule->column;
+
+            if (count($db) > 1)
+            {
+                $table = current($db);
+                $field = end($db);
+            }
+
+            if (DB::table($table)->where($field, $rule->value)->count())
             {
                 return $this->message($rule);
             }
@@ -551,13 +637,7 @@ class Validator
     {
         $extension = pathinfo($rule->value['name'], PATHINFO_EXTENSION);
 
-        if (is_array($rule->needed))
-        {
-            return in_array($extension, $rule->needed)
-                ? true
-                : false;
-        }
-        elseif ($rule->needed == $extension)
+        if (in_array($extension, $rule->needed))
         {
             return true;
         }

@@ -4,6 +4,7 @@ namespace Roster\Database;
 
 use JsonSerializable;
 use Roster\Support\Pluralizer;
+use Roster\Support\Str;
 
 class Model implements JsonSerializable
 {
@@ -112,16 +113,20 @@ class Model implements JsonSerializable
      */
     public function setWhereValue($value)
     {
-        return $this->whereValue = $value;
+        $this->whereValue = $value;
+
+        return $this;
     }
 
     /**
      * @param array $attributes
-     * @return array
+     * @return Model
      */
     public function fill(array $attributes)
     {
-        return $this->attributes += $attributes;
+        $this->attributes += $attributes;
+
+        return $this;
     }
 
     /**
@@ -135,7 +140,7 @@ class Model implements JsonSerializable
 
         $table = array_pop($filter);
 
-        $table = Pluralizer::make($table);
+        $table = Str::plural($table);
 
         return $table;
     }
@@ -176,11 +181,11 @@ class Model implements JsonSerializable
      * @param $value
      * @return mixed
      */
-    public function setAttributes($key, $value = null)
+    public function setAttribute($key, $value = null)
     {
         if (is_array($key))
         {
-            return $this->attributes += $key;
+            return $this->fill($key);
         }
 
         $this->attributes[$key] = $value;

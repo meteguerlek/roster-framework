@@ -9,7 +9,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
-class CreateModel extends Command
+class CreateMail extends Command
 {
     /**
      * Configure
@@ -17,14 +17,9 @@ class CreateModel extends Command
      */
     protected function configure()
     {
-        $this->setName("create:model")
-            ->setDescription("Create model with default content.")
-            ->addArgument('name', InputArgument::REQUIRED, 'Who do you want to greet?')
-            ->addOption(
-                'controller',
-                'c',
-                InputOption::VALUE_NONE
-            )
+        $this->setName("create:mail")
+            ->setDescription("Create mail")
+            ->addArgument('name', InputArgument::REQUIRED)
             ->setHelp('How do you call it?');
     }
 
@@ -37,7 +32,7 @@ class CreateModel extends Command
      */
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        $this->createModel($input, $output);
+        $this->createMail($input, $output);
 
     }
 
@@ -48,12 +43,12 @@ class CreateModel extends Command
      * @param $output
      * @return mixed
      */
-    protected function createModel($input, $output)
+    protected function createMail($input, $output)
     {
-        $stub = File::where('src.Console.Commands.stubs', 'create_model', 'stub')
+        $stub = File::where('src.Console.Commands.stubs', 'create_mail', 'stub')
             ->getContent();
 
-        $disk = config('disk.models');
+        $disk = config('disk.mail');
 
         $class = explode('/', $input->getArgument('name'));
         $className = array_pop($class);
@@ -67,7 +62,7 @@ class CreateModel extends Command
 
         File::create($stub, $disk.'.'.implode('.', $class), $className);
 
-        return $output->writeln('<fg=green>Model '.$input->getArgument('name').' created.</>');
+        return $output->writeln('<fg=green>Mail '.$input->getArgument('name').' created.</>');
 
     }
 }

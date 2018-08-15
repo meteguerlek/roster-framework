@@ -22,16 +22,26 @@ class Alert
      */
     protected function set($name, $alert)
     {
-        $history = [];
+        $old = [];
 
         $name = Str::plural($name);
 
         if (Session::has($name))
         {
-            $history = Session::get($name);
+            $old = Session::get($name);
         }
 
-        Session::set($name, array_merge($history, (array) $alert));
+        if (!is_array($alert))
+        {
+            $old['alert'][] = $alert;
+        }
+        else
+        {
+            $old += $alert;
+        }
+
+
+        Session::set($name, $old);
 
         return $this;
     }
@@ -111,9 +121,7 @@ class Alert
 
         if (in_array($name, $static->alerts))
         {
-            return $static->set($name, $arguments[0]);
+            return $static->set($name, ...$arguments);
         }
-
-        throw new \Exception("Method {$name} not exist");
     }
 }

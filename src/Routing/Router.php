@@ -3,10 +3,16 @@
 namespace Roster\Routing;
 
 use App\Http\Kernel;
+use Closure;
 use ReflectionFunction;
 use Roster\Auth\Roster\Auth;
+use Roster\Http\Middleware;
+use Roster\Http\Redirect;
 use Roster\Http\Request;
 use Roster\Filesystem\File;
+use Roster\Http\Response;
+use Roster\Logger\Log;
+use Roster\View\View;
 
 class Router
 {
@@ -41,6 +47,17 @@ class Router
     protected static $request = null;
 
     /**
+     * @var Route
+     */
+    protected $currentRoute;
+
+    /**
+     * Request method
+     *
+     * @var null
+     */
+    protected $currentMethod = null;
+    /**
      * @var null
      */
     protected $query = null;
@@ -55,12 +72,6 @@ class Router
      */
     protected $action = null;
 
-    /**
-     * Request method
-     *
-     * @var null
-     */
-    protected $currentMethod = null;
 
     /**
      * @var array
@@ -113,6 +124,34 @@ class Router
         'VIEW', 'REDIRECT'
     ];
 
+    public function __construct()
+    {
+        $this->currentRoute = new Route();
+    }
+
+    public function start($method, $arguments)
+    {
+        if ($method == 'middleware')
+        {
+            return $this->addMiddlewareGroup(...$arguments);
+        }
+
+        $method = strtoupper($method);
+        $this->currentRoute->fakeMethod = $method;
+
+        if (in_array($method, $this->allMethods()))
+        {
+            if($this->isBasic($method))
+            {
+                $method = 'GET';
+
+                $this->with = isset($arguments[2]) ? $arguments[2] : [];
+            }
+
+            return $this->addRoute($arguments[0], $arguments[1], $method);
+        }
+    }
+
     /**
      * Set current query
      *
@@ -130,9 +169,13 @@ class Router
      * @param $method
      * @return mixed
      */
-    protected function setCurrentMethod($method)
+    protected function setMethod($method)
     {
-        return $this->currentMethod = $method;
+        $this->currentMethod = $method;
+
+        $this->currentRoute->method = $method;
+
+        return $this;
     }
 
     /**
@@ -170,28 +213,16 @@ class Router
      * @param $query
      * @param $action
      * @param $method
-     * @return array
      */
     protected function compileRoute($query, $action, $method)
     {
-        $this->setAction($action, $query);
+        $this->setAction($action);
         $this->setQuery($query);
-        $this->compileParam();
-        $this->setCurrentMethod($method);
+        //$this->compileParam();
+        $this->setMethod($method);
         $this->setMiddleware();
 
-        return static::$routes[$method][$this->query] = [
-            'query' => $this->query,
-            'method' => $method,
-            'fakeMethod' => $this->fakeMethod,
-            'controller' => $this->controller,
-            'action' => $this->action,
-            'middleware' => $this->middleware,
-            'function' => $this->function,
-            'basic' => $this->basic,
-            'with' => $this->with,
-            'params' => $this->params,
-        ];
+        static::$routes[$method][$this->currentRoute->query] = $this->currentRoute;
     }
 
     /**
@@ -218,89 +249,8 @@ class Router
                 array_pop(static::$group['middleware']);
             }
 
-            $middleware = array_merge(array_keys(static::$group['middleware']), static::$middlewareGroup);
-
-            $this->middleware = $middleware;
+            $this->currentRoute->addMiddleware(array_merge(array_keys(static::$group['middleware']), static::$middlewareGroup));
         }
-    }
-
-    /**
-     * Run routes
-     *
-     * @return \Roster\View\View
-     */
-    public static function run()
-    {
-        $static = new static;
-        $static::setCurrentQuery();
-
-        if (!$static->checkCache())
-        {
-            static::loadRoutes();
-        }
-        // First check if route defined
-        // Second, we check here if a request for post variable exists
-        // and if csrf is corect
-        if ($static->routeExist() && $static->isSecured())
-        {
-            return $static->loadController(static::$routes[static::getMethod()][static::$currentQuery]);
-        }
-
-        return $static->abort();
-    }
-
-    public static function loadRoutes()
-    {
-        return require_once File::where('routes', 'web')->getPath();
-    }
-
-    protected function checkCache()
-    {
-        $file = File::where(config('disk.storage.cache'), 'routes');
-
-        if (!$file->exist())
-        {
-            return false;
-        }
-
-        $cache = require $file->getPath();
-
-        static::$routes = $cache['routes'];
-        static::$names = $cache['names'];
-        $method = static::getMethod();
-
-        static::$routes[$method] = [];
-
-        foreach ($cache['routes'][$method] as $route)
-        {
-            $this->query = $route['query'];
-            $this->compileParam();
-            $old = $cache['routes'][$method][$route['query']];
-
-            static::$routes[$method][$this->query] = array_merge($old, [
-                'query' => $this->query,
-                'params' => $this->params
-            ]);
-
-            if ($this->query == static::$currentQuery)
-            {
-                return true;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Check if routes exist
-     *
-     * @return bool
-     */
-    protected function routeExist()
-    {
-        return array_key_exists(static::$currentQuery, static::$routes[static::getMethod()])
-            ? true
-            : false;
     }
 
     /**
@@ -316,9 +266,12 @@ class Router
      */
     public static function getMethod()
     {
-        return Request::has('_method')
-            ? Request::getValue('_method')
-            : static::realMethod();
+        if (Request::isPost() && Request::has('_method'))
+        {
+            return Request::getValue('_method');
+        }
+
+        return static::realMethod();
     }
 
     /**
@@ -360,30 +313,27 @@ class Router
      * Set action
      *
      * @param $action
-     * @return $this
      */
-    protected function setAction($action, $query)
+    protected function setAction($action)
     {
         if(is_string($action))
         {
             if(strstr($action, '@'))
             {
                 $action = explode('@', $action);
-                $controller = current($action);
-                $method = end($action);
 
-                $this->controller = $controller;
-                $this->action = $method;
+                $this->currentRoute->controller = current($action);
+                $this->currentRoute->action = end($action);
             }
             else
             {
-                $this->basic = $action;
+                $this->currentRoute->basic = $action;
             }
         }
 
-        if ($action instanceof \Closure)
+        if ($action instanceof Closure)
         {
-            $this->function = $action;
+            $this->currentRoute->closure = $action;
         }
     }
 
@@ -395,21 +345,74 @@ class Router
      */
     protected function setQuery($query)
     {
-        $this->original = $query;
+        $this->currentRoute->original = $query;
 
-        $this->query = $query;
+        $this->currentRoute->query = $query;
 
         return $this;
     }
 
     /**
+     * Run routes
+     *
+     * @return \Roster\View\View
+     */
+    public static function run()
+    {
+        $static = new static;
+        $static::setCurrentQuery();
+
+        if (!$static->checkCache())
+        {
+            static::loadRoutes();
+        }
+
+        // First check if route defined
+        // Second, we check here if a request for post variable exists
+        // and if csrf is corect
+        if ($static->isSecured() && $route = $static->findRoute())
+        {
+            return $static->prepare($route);
+        }
+
+        return $static->abort();
+    }
+
+    /**
+     * @return mixed
+     */
+    public static function loadRoutes()
+    {
+        return require_once File::where('routes', 'web')->getPath();
+    }
+
+    /**
+     * @return bool|Route
+     */
+    protected function findRoute()
+    {
+        foreach (static::$routes[static::getMethod()] as $route)
+        {
+            $this->compileQuery($route);
+
+            if ($route->query === static::$currentQuery)
+            {
+                return $route;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Compile param
      *
+     * @param $route
      * @return $this
      */
-    protected function compileParam()
+    protected function compileQuery($route)
     {
-        $query = explode('/', $this->query);
+        $query = explode('/', $route->query);
 
         $currentQuery = explode('/', static::$currentQuery);
 
@@ -433,9 +436,9 @@ class Router
                 }
             }
 
-            $this->query = implode('/', $query);
+            $route->query = implode('/', $query);
 
-            $this->params = array_merge($params, Request::all());
+            $route->params = array_merge($params, Request::all());
         }
 
         return $this;
@@ -444,47 +447,95 @@ class Router
     /**
      * Load controller
      *
-     * @param $route
+     * @param Route $route
      * @return mixed
      */
-    protected function loadController($route)
+    protected function prepare(Route $route)
     {
-        $request = $this->setRequest($route['params']);
+        $request = $this->setRequest($route->params);
 
-        // View / Redirect
-        if(in_array($route['fakeMethod'], $this->basics))
+        $this->runMiddlewares($route->middleware, $request);
+
+        $response = $this->callBack($route, $request);
+
+        return $this->toResponse($response);
+    }
+
+    /**
+     * @return bool
+     */
+    protected function checkCache()
+    {
+        $file = File::where(config('disk.storage.cache'), 'routes');
+
+        if (!$file->exist())
         {
-            if ($route['fakeMethod'] == 'VIEW')
-            {
-                return $this->callView($route['basic'], $request, $route['with']);
-            }
-            elseif ($route['fakeMethod'] == 'REDIRECT')
-            {
-                return $this->callRedirect($route['basic'], $route['with']);
-            }
+            return false;
+        }
 
-            return $this->abort();
+        $cache = require $file->getPath();
+
+        static::$routes = $cache['routes'];
+        static::$names = $cache['names'];
+
+        return true;
+    }
+
+    /**
+     * @param $response
+     * @return mixed|Response|View|void
+     */
+    protected function toResponse($response)
+    {
+        if ($response instanceof View)
+        {
+            $response = new Response($response->render());
+
+            return $response->prepare();
+        }
+        elseif ($response instanceof Response)
+        {
+            return $response->prepare();
+        }
+        elseif ($response instanceof Redirect)
+        {
+            return $response->prepare();
+        }
+    }
+
+    /**
+     * @param Route $route
+     * @param Request $request
+     * @return mixed|View
+     */
+    protected function callBack(Route $route, Request $request)
+    {
+        if ($route->fakeMethod == 'VIEW')
+        {
+            return $this->callView($route->basic, $request, $route->with);
+        }
+        elseif ($route->fakeMethod == 'REDIRECT')
+        {
+            return $this->callRedirect($route->basic, $route->with);
         }
 
         // Closure
-        if(!is_null($route['function']))
+        if(!is_null($route->closure))
         {
-            return $route['function']($request);
+            return $route->callClosure($request);
         }
-
-        $className = config('app.controllers').str_replace('/', '\\', $route['controller']);
-        $class = new $className();
-
-        $this->runMiddlewares($route['middleware'], $request);
-
         // Load controller
-        return $class->{$route['action']}($request);
+        elseif ($route->controller)
+        {
+            return $route->callController($request);
+        }
     }
 
     /**
      * Get request
      *
      * @param $params
+     * @return Request
      */
     protected function setRequest($params)
     {
@@ -497,31 +548,51 @@ class Router
     /**
      * Run middlewares
      *
-     * @param $middlewares
+     * @param $routeMiddlewares
      * @param $request
-     * @throws \Exception
      */
-    protected function runMiddlewares($middlewares, $request)
+    protected function runMiddlewares($routeMiddlewares, $request)
     {
         $kernel = new Kernel();
 
-        foreach ($kernel->getMiddlewares() as $middleware)
-        {
-            $middleware = new $middleware();
-            $middleware->{'handle'}($request);
-        }
-
         $routeMiddleware = $kernel->getRouteMiddleware();
+        $run = [];
 
-        foreach ($middlewares as $middleware)
+        foreach ($routeMiddlewares as $middleware)
         {
             if (array_key_exists($middleware, $routeMiddleware))
             {
-                $middleware = new $routeMiddleware[$middleware]();
-
-                $middleware->{'handle'}($request);
+               $run[] = $routeMiddleware[$middleware];
             }
         }
+
+        $middlewares = array_merge($kernel->getMiddlewares(), $run);
+
+        foreach ($middlewares as $middleware)
+        {
+            $middleware = new $middleware();
+
+            $next = next($middlewares);
+
+            if (!$next)
+            {
+                $next = end($middlewares);
+            }
+
+            $middle = function($request) use ($next){
+                static $next;
+                return $request;
+            };
+
+            $response = $middleware->{'handle'}($request, $middle);
+
+            if (!$response instanceof Request)
+            {
+                return $this->toResponse($response);
+            }
+
+        }
+
     }
 
     /**
@@ -533,7 +604,7 @@ class Router
      */
     public static function group($group, $callback)
     {
-        if ($callback instanceof \Closure)
+        if ($callback instanceof Closure)
         {
             if (isset($group['prefix']))
             {
@@ -573,7 +644,6 @@ class Router
      * @param Request $request
      * @param array $with
      * @return \Roster\View\View
-     * @throws \Exception
      */
     protected function callView($view, Request $request, $with = [])
     {
@@ -600,7 +670,7 @@ class Router
      */
     public function name($name)
     {
-        static::$names[$name] = $this->original;
+        static::$names[$name] = $this->currentRoute->original;
 
         return $this;
     }
@@ -616,7 +686,7 @@ class Router
 
         foreach ($middlewares as $middleware)
         {
-            static::$routes[$this->currentMethod][$this->query]['middleware'][] = $middleware;
+            $this->currentRoute->addMiddleware($middleware);
         }
 
         return $this;
@@ -630,7 +700,7 @@ class Router
      */
     protected function addMiddlewareGroup($method, $callback)
     {
-        if ($callback instanceof \Closure)
+        if ($callback instanceof Closure)
         {
             static::$middlewareGroup += (array) $method;
 
@@ -673,30 +743,21 @@ class Router
         return static::$names;
     }
 
-    /**
-     * Check if method exist
-     *
-     * @param $class
-     * @param $method
-     */
-    protected function checkIfMethodExist($class, $method)
-    {
-        if (!class_exists(get_class($class)))
-        {
-            throw new \Exception('The Class ' . $method . ' not exist!');
-        }
-
-        if (!method_exists($class, $method))
-        {
-            throw new \Exception('The Method ' . $method . ' not exist!');
-        }
-    }
-
     protected function abort()
     {
         header("HTTP/1.0 404 Not Found");
 
         customView('error'); die;
+    }
+
+    protected function isBasic($method)
+    {
+        return in_array($method, $this->basics, true);
+    }
+
+    protected function allMethods()
+    {
+        return array_merge($this->methods, $this->basics);
     }
 
     public function __call($method, $arguments)
@@ -716,28 +777,6 @@ class Router
      */
     public static function __callStatic($method, $arguments)
     {
-        $static = new static;
-
-        if ($method == 'middleware')
-        {
-            return $static->addMiddlewareGroup(...$arguments);
-        }
-
-        $method = strtoupper($method);
-        $static->fakeMethod = $method;
-
-        if (in_array($method, array_merge($static->methods, $static->basics)))
-        {
-            if(in_array($method, $static->basics, true))
-            {
-                $method = 'GET';
-
-                $static->with = isset($arguments[2]) ? $arguments[2] : [];
-            }
-
-            return $static->addRoute($arguments[0], $arguments[1], $method);
-        }
-
-        throw new \Exception("Method {$method} not exist");
+        return (new static)->start($method, $arguments);
     }
 }

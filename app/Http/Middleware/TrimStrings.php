@@ -11,11 +11,11 @@ class TrimStrings
         'password_confirmation'
     ];
 
-    public function handle($request)
+    public function handle($request, $next)
     {
-        if (!Request::isPost())
+        if (Request::isGet())
         {
-            return true;
+            return $next($request);
         }
 
         foreach ($request->all() as $key => $value)
@@ -28,5 +28,7 @@ class TrimStrings
                 }
             }
         }
+
+        return $next($request);
     }
 }

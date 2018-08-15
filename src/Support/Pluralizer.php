@@ -4,7 +4,6 @@ namespace Roster\Support;
 
 class Pluralizer
 {
-
     /**
      * @var array
      */
@@ -30,22 +29,27 @@ class Pluralizer
     ];
 
     /**
+     * @var string
+     */
+    protected $pluralizered;
+
+    /**
      * Pluralize string
      *
-     * @param string $model
+     * @param string $string
      * @param bool $original
      * @return mixed|string
      */
-    protected function make(string $model, $original = false)
+    public function __construct(string $string, $original = false)
     {
-        if (in_array($model, array_keys($this->irregularPlurals)))
+        if (in_array($string, array_keys($this->irregularPlurals)))
         {
-            return $model = $this->irregularPlurals[$model];
+            return $this->pluralizered = $this->irregularPlurals[$string];
         }
 
         if (!$original)
         {
-            $model = $this->parse($model);
+            $string = $this->parse($string);
         }
 
         foreach ($this->rules as $plural => $endings)
@@ -54,24 +58,40 @@ class Pluralizer
             {
                 foreach ($endings as $ending)
                 {
-                    if ($model[strlen($model) - 1] == $ending) // Last letter
+                    if ($string[strlen($string) - 1] == $ending) // Last letter
                     {
-                        return $this->find($model, $plural, $ending);
+                        return $this->pluralizered = $this->find($string, $plural, $ending);
                     }
                 }
 
                 continue;
             }
 
-            if ($model[strlen($model) - 1] == $endings) // Last letter
+            if ($string[strlen($string) - 1] == $endings) // Last letter
             {
-                return $this->find($model, $plural, $endings);
+                return $this->pluralizered = $this->find($string, $plural, $endings);
             }
         }
 
-        $model .= 's';
+        $this->pluralizered = $string.'s';;
+    }
 
-        return $model;
+    /**
+     * @param string $string
+     * @param bool $original
+     * @return Pluralizer
+     */
+    public static function make(string $string, $original = false)
+    {
+        return (new static($string, $original))->pluralizered;
+    }
+
+    /**
+     * @return string
+     */
+    public function getPluralizered()
+    {
+        return $this->pluralizered;
     }
 
     /**
@@ -132,15 +152,5 @@ class Pluralizer
 
         // Return lower
         return strtolower($parse);
-    }
-
-    /**
-     * @param $name
-     * @param $arguments
-     * @return mixed
-     */
-    public static function __callStatic($name, $arguments)
-    {
-        return (new static)->{$name}(...$arguments);
     }
 }

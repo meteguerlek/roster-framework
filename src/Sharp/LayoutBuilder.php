@@ -36,7 +36,7 @@ class LayoutBuilder
 
     public function make()
     {
-        return new View($this->layout, ['__sharp' => $this]);
+        return response((new View($this->layout, ['__sharp' => $this]))->render())->prepare();
     }
 
     public function yieldContent($name)
