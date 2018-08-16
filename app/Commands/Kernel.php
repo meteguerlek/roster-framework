@@ -11,8 +11,6 @@ class Kernel extends ConsoleKernel
      * @var array
      */
     protected $commands = [
-        CreateCompany::class,
-        CreateEmployees::class,
-        DatabaseTruncate::class
+        //
     ];
 }
